@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import aiohttp
 
 from app.config import settings
 from app.infrastructure.github_client import GitHubGraphQLClient
@@ -23,18 +24,20 @@ async def main():
     from app.infrastructure.database import init_db
     await init_db()
     
-    github_client = GitHubGraphQLClient()
-    persistence = PostgresRepositoryPersistence()
-    
-    # Initialize use case
-    crawler = RecursiveCrawler(github_client, persistence)
-    
-    # Execute
-    try:
-        await crawler.crawl()
-    except Exception as e:
-        logger.exception("Crawler failed with unhandled exception")
-        sys.exit(1)
+    # Use a single session for the entire application
+    async with aiohttp.ClientSession() as session:
+        github_client = GitHubGraphQLClient(session)
+        persistence = PostgresRepositoryPersistence()
+        
+        # Initialize use case
+        crawler = RecursiveCrawler(github_client, persistence)
+        
+        # Execute
+        try:
+            await crawler.crawl()
+        except Exception as e:
+            logger.exception("Crawler failed with unhandled exception")
+            sys.exit(1)
     
     logger.info("Crawler finished successfully.")
 
