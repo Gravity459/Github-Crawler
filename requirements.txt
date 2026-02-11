@@ -1,0 +1,7 @@
+aiohttp==3.9.3
+asyncpg==0.29.0
+pydantic==2.6.1
+pydantic-settings==2.1.0
+sqlmodel==0.0.16
+sqlalchemy==2.0.28
+greenlet==3.0.3

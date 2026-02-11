@@ -1,0 +1,66 @@
+name: GitHub Crawler
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Daily at midnight
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: github_data
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Migrations
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/github_data
+        run: |
+          # Simple migration runner for this task using Psql (available in runner)
+          PGPASSWORD=password psql -h localhost -U user -d github_data -f migrations/001_initial_schema.sql
+
+      - name: Run Crawler
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATABASE_URL: postgresql://user:password@localhost:5432/github_data
+          TARGET_REPO_COUNT: 100000
+          LOG_LEVEL: INFO
+        run: |
+          python -m app.main
+
+      - name: Export Data
+        env:
+          DATABASE_URL: postgresql://user:password@localhost:5432/github_data
+        run: |
+          PGPASSWORD=password psql -h localhost -U user -d github_data -c "\COPY (SELECT * FROM public_repos) TO 'repositories.csv' WITH CSV HEADER"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repositories-csv
+          path: repositories.csv
